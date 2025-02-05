@@ -111,9 +111,44 @@ if unlogged_exercises:
     exercise_details = df_week[df_week["Exercise"] == selected_exercise].iloc[0]
     st.write(f"**Target Sets:** {exercise_details['Sets']}, **Target Reps:** {exercise_details['Reps']}, **Rest Time:** {exercise_details['Rest Time']}")
     workout_date = st.date_input("Workout Date", datetime.date.today())
-    completed_sets = st.number_input("Completed Sets", min_value=0, max_value=10, step=1,  value=0)
-    completed_reps = st.text_input("Completed Reps (e.g., 10,10,8,6)")
-    orm = st.number_input("One Rep Max (ORM)", min_value=0, step=1, value=0)
+    completed_reps = []
+    completed_weights = []
+    
+    # Initialize session state for dynamic input fields
+    if 'set_count' not in st.session_state:
+        st.session_state.set_count = 1
+
+    # Function to add more sets
+    def add_set():
+        st.session_state.set_count += 1
+
+    # Display input fields for each set
+    current_weight = 0.0
+    for i in range(1, st.session_state.set_count + 1):
+        rep = st.number_input(f"Reps for Set {i}/{exercise_details['Sets']}", min_value=0, step=1, value=exercise_details['Reps'], key=f"reps_{i}")
+        weight = st.number_input(f"Weight for Set {i} (kg)", min_value=0.0, step=0.5, value=current_weight, key=f"weight_{i}")
+        if rep and weight:
+            current_weight = float(weight)
+            completed_reps.append(rep)
+            completed_weights.append(weight)
+    
+    if st.button("Another set"):
+        add_set()
+
+    completed_sets = len(completed_reps)
+    st.write(f"Completed Sets: {completed_sets}")
+
+    if completed_reps and completed_weights:
+        max_weight = max(completed_weights)
+        max_reps = completed_reps[completed_weights.index(max_weight)]
+        if max_reps > 1:
+            orm = max_weight
+        else:
+            orm = round(max_weight * (1 + max_reps / 30), 2)
+    else:
+        orm = 0
+
+    st.write(f"Calculated One Rep Max (ORM): {orm}")
     notes = st.text_area("Notes")
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if st.button("Log Workout", key="log_workout"):
@@ -124,6 +159,7 @@ if unlogged_exercises:
             "Exercise": [selected_exercise],
             "Completed Sets": [completed_sets],
             "Completed Reps": [completed_reps],
+            "Completed Weights": [completed_weights],
             "Completed": [True if completed_sets > 0 else False],
             "ORM": [orm],
             "Notes": [notes],
@@ -155,7 +191,6 @@ if unlogged_exercises:
 else:
     st.success("You have completed all exercises for this muscle group!")
     # Show the summary of the completed exercises
-st.subheader("Today Exercises")
 
 
 # st.subheader("Workout History")
