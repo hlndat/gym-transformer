@@ -233,6 +233,10 @@ if not is_completed:
     st.write(f"**Selected Exercise:** {selected_exercise}")
     exercise_details = df_week[df_week["Exercise"] == selected_exercise].iloc[0]
     st.write(f"**Target Sets:** {exercise_details['Sets']}, **Target Reps:** {exercise_details['Reps']}, **Rest Time:** {exercise_details['Rest Time']}")
+    # Add a link to search for the selected exercise on Google
+    query = selected_exercise + " body building guide"
+    search_query = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+    st.markdown(f"[Search for {selected_exercise} on Google]({search_query})")
     # Exercise History
     st.subheader("Exercise History")
     df_exercise_history = workout_log[workout_log["Exercise"] == selected_exercise]
