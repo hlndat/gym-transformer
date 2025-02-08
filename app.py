@@ -4,13 +4,29 @@ import datetime
 import os
 import matplotlib.pyplot as plt
 import re
+from io import BytesIO
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
+from google.oauth2.service_account import Credentials
+import threading
+
+# Google Drive API setup using Streamlit Secrets
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
+FILE_NAME = 'workout_log.csv'
+
+# Load credentials from Streamlit secrets
+SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 global workout_log
 # Load the structured workout plan
 def format_df_history(df):
-    df['Set'] = df.apply(lambda x: str(x['Sets'])+"/"+str(x["Target Sets"]), axis=1)                                      
-    df['Rep'] = df.apply(lambda x: str(x['Reps'])+"/"+str(x["Target Reps"]), axis=1)
-    df = df[['Week', 'ORM',  'Set', 'Rep', 'Weights','Completed','Date', 'Notes']]
+    try:
+        df['Set'] = df.apply(lambda x: str(x['Sets'])+"/"+str(x["Target Sets"]), axis=1)                                      
+        df['Rep'] = df.apply(lambda x: str(x['Reps'])+"/"+str(x["Target Reps"]), axis=1)
+        df = df[['Week', 'ORM',  'Set', 'Rep', 'Weights','Completed','Date', 'Notes']]
+    except:
+        pass
     return df
+
 def load_workout_plan():
     # Define the structured workout plan including muscle groups, exercises, and default reps/sets
     structured_workout_data = [
@@ -76,14 +92,57 @@ def load_workout_plan():
 
     return df_final
 
-log_file = "workout_log.csv"
-if os.path.exists(log_file):
-    workout_log = pd.read_csv(log_file)
-else:
-    workout_log = pd.DataFrame(columns=["Date", "Week", "Day Of Week", "Exercise", "Completed"])
+# Authenticate and create Drive service
+def authenticate_google_drive():
+    creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=SCOPES)
+    return build('drive', 'v3', credentials=creds)
 
-def save_workout_log():
-    workout_log.to_csv(log_file, index=False)
+def get_file_id(service, filename):
+    results = service.files().list(q=f"name='{filename}'", fields="files(id, name)").execute()
+    items = results.get('files', [])
+    return items[0]['id'] if items else None
+
+def load_workout_log(service):
+    file_id = get_file_id(service, FILE_NAME)
+    if file_id:
+        request = service.files().get_media(fileId=file_id)
+        fh = BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        return pd.read_csv(fh)
+    else:
+        return pd.DataFrame(columns=["Date", "Week", "Day Of Week", "Exercise", "Completed", "Sets", "Reps", "Weights", "ORM", "Notes", "Timestamp", "Target Sets", "Target Reps"])
+
+def save_workout_log(service, df, to_drive=True):
+    df.to_csv(FILE_NAME, index=False)
+    file_id = get_file_id(service, FILE_NAME)
+    if to_drive:
+        def upload_to_drive():
+            media = MediaFileUpload(FILE_NAME, mimetype='text/csv')
+            if file_id:
+                service.files().update(fileId=file_id, media_body=media).execute()
+            else:
+                file_metadata = {'name': FILE_NAME}
+                service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+        threading.Thread(target=upload_to_drive).start()
+
+
+# Authenticate and load data
+service = authenticate_google_drive()
+if st.button("Reload Workout Log From Drive"):
+    workout_log = load_workout_log(service)
+    st.success("Reloaded workout log from Google Drive successfully!")
+    st.rerun()
+if not os.path.exists(FILE_NAME):
+    workout_log = load_workout_log(service)
+    workout_log.to_csv(FILE_NAME, index=False)
+else:
+    workout_log = pd.read_csv(FILE_NAME)
+
 
 st.title("12-Week Workout Tracker")
 
@@ -172,17 +231,25 @@ if not is_completed:
     last_orm = df_exercise_history['ORM'].iloc[-1] if not df_exercise_history.empty else 0
     
     workout_date = st.date_input("Workout Date", datetime.date.today())
-    completed_sets = st.number_input("Sets - Target: " + str(exercise_details['Sets']), min_value=0, step=1)
-    reps = st.text_input("Reps (comma separated) - Target: " + str(exercise_details['Reps']))
+    # completed_sets = st.number_input("Sets - Target: " + str(exercise_details['Sets']), min_value=0, step=1)
     weights = st.text_input("Weights (comma separated) - Last ORM: " + str(last_orm))
-
+    reps = st.text_input("Reps (comma separated) - Target: " + str(exercise_details['Reps']) + " Reps x " + str(exercise_details['Sets']) + " Sets, Finished by default.")
     # Clean the reps and weights text, keep only float numbers and commas
     completed_reps = [float(x) for x in re.findall(r'\d+\.?\d*', reps)]
+    auto_input_rep = False
+    if not completed_reps:
+        completed_reps = [int(exercise_details['Reps'])] * exercise_details['Sets']
+        reps = ",".join([str(x) for x in completed_reps])
+        auto_input_rep = True
     completed_weights = [float(x) for x in re.findall(r'\d+\.?\d*', weights)]
     notes = st.text_area("Notes")
+    completed_sets = 0
     # Clean the reps and weights text, keep only float numbers and commas
-    if completed_reps and completed_weights:
+    if completed_weights:
         max_weight = max(completed_weights)
+        completed_sets = len(completed_reps)
+        if not auto_input_rep:
+            st.write(f"Completed Sets: {completed_sets}/{exercise_details['Sets']}")
         orm = max_weight
         # max_reps = completed_reps[completed_weights.index(max_weight)]
         # if max_reps > 1:
@@ -213,7 +280,7 @@ if not is_completed:
             "Target Reps": [df_workout.loc[df_workout["Exercise"] == selected_exercise, "Reps"].values[0]]
         })
         workout_log = pd.concat([workout_log, new_entry], ignore_index=True)
-        save_workout_log()
+        save_workout_log(service, workout_log)
         st.success(f"Logged {selected_exercise} successfully!")
         st.rerun()
 
@@ -223,7 +290,7 @@ elif is_completed:
     st.success(f"You have completed {selected_exercise} for {selected_day}!")
     st.subheader(f"{selected_week} - {selected_day}'s Workout")
     completed_wordkout_df = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)]
-    st.dataframe(completed_wordkout_df[['ORM', 'Sets', 'Reps', 'Weights','Completed','Date', 'Notes']])
+    st.dataframe(completed_wordkout_df[[ "Exercise",'ORM', 'Sets', 'Reps', 'Weights','Completed','Date', 'Notes']])
     st.subheader(f"{selected_exercise} History")
     df_exercise_history = workout_log[workout_log["Exercise"] == selected_exercise]
     df_exercise_history = format_df_history(df_exercise_history)
