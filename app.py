@@ -169,14 +169,14 @@ for week in total_days_per_week.index:
 # Generate week options
 all_weeks = df_workout["Week"].unique()
 week_options = [
-    f"{week} - Done" if week in completed_weeks else week 
+    f"{week} ✅" if week in completed_weeks else week 
     for week in all_weeks
 ]
 
 # Auto-select first incomplete week
 default_week = next((week for week in all_weeks if week not in completed_weeks), all_weeks[0])
 selected_week = st.selectbox("Select Week", week_options, index=list(all_weeks).index(default_week))
-selected_week = selected_week.replace(" - Done", "")
+selected_week = selected_week.replace(" ✅", "").replace(" ❌", "")
 # Identify completed days for the selected week
 days_of_week = df_workout[df_workout["Week"] == selected_week]["Day Of Week"].unique()
 logged_days = []
@@ -189,26 +189,36 @@ for day in days_of_week:
 
 # Mark days as 'Done'
 day_options = [
-    f"{day} - Done" if day in logged_days else day 
+    f"{day} ✅" if day in logged_days else day 
     for day in days_of_week
 ]
 
 default_day = next((day for day in days_of_week if day not in logged_days), days_of_week[0])
 selected_day = st.selectbox("Select Day Of Week", day_options, index=list(days_of_week).index(default_day))
-selected_day = selected_day.replace(" - Done", "")
+selected_day = selected_day.replace(" ✅", "").replace(" ❌", "")
 # Select Exercise
 exercises = df_workout[(df_workout["Week"] == selected_week) & (df_workout["Day Of Week"] == selected_day)]["Exercise"].unique()
 logged_exercises = workout_log.loc[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day), "Exercise"].unique()
-
+logged_exercises_df = workout_log.loc[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)]
 exercise_options = [
-    f"{ex} - Done" if ex in logged_exercises else ex 
-    for ex in exercises
+    # f"{ex} ✅" if ex in logged_exercises else ex 
+    # for ex in exercises
 ]
+for ex in exercises:
+    if ex in logged_exercises_df["Exercise"].values:
+        ex_df = logged_exercises_df[logged_exercises_df["Exercise"] == ex]
+        completed = ex_df["Completed"].values[0]
+        if completed:
+            exercise_options.append(f"{ex} ✅")
+        else:
+            exercise_options.append(f"{ex} ❌")
+    else:
+        exercise_options.append(ex)
 
 # Auto-select first incomplete exercise
 default_exercise = next((ex for ex in exercises if ex not in logged_exercises), exercises[0])
 selected_exercise = st.selectbox("Select Exercise", exercise_options, index=list(exercises).index(default_exercise))
-selected_exercise = selected_exercise.replace(" - Done", "")
+selected_exercise = selected_exercise.replace(" ✅", "").replace(" ❌", "")
 
 is_completed = selected_exercise in logged_exercises
 
@@ -285,9 +295,16 @@ if not is_completed:
         st.rerun()
 
 elif is_completed:
+    # Find in logged exercises that if selected_exercise is completed
+    selected_exercise_data = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day) & (workout_log["Exercise"] == selected_exercise)]
     
-    
-    st.success(f"You have completed {selected_exercise} for {selected_day}!")
+    if not selected_exercise_data.empty:
+        if selected_exercise_data["Completed"].values[0]:
+            st.success(f"You have completed {selected_exercise} for {selected_day}!")
+        else:
+            st.warning(f"You have skipped {selected_exercise} for {selected_day}!")
+    else:
+        pass
     st.subheader(f"{selected_week} - {selected_day}'s Workout")
     completed_wordkout_df = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)]
     st.dataframe(completed_wordkout_df[[ "Exercise",'ORM', 'Sets', 'Reps', 'Weights','Completed','Date', 'Notes']])
