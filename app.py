@@ -12,8 +12,8 @@ import threading
 
 # Google Drive API setup using Streamlit Secrets
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-FILE_NAME = 'workout_log2.csv'
-
+FILE_NAME = 'workout_log.csv'
+PLAN_FILE_NAME = 'workout_plan.csv'
 # Load credentials from Streamlit secrets
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 global workout_log
@@ -27,71 +27,9 @@ def format_df_history(df):
         pass
     return df
 
-def load_workout_plan():
-    # Define the structured workout plan including muscle groups, exercises, and default reps/sets
-    structured_workout_data = [
-        ["Day 1: Chest & Back", "Barbell Bench Press", 4, 12, "90 sec"],
-        ["Day 1: Chest & Back", "Pull Ups / Lat Pulldown", 5, 8, "90 sec"],
-        ["Day 1: Chest & Back", "Incline Dumbbell Press", 4, 10, "90 sec"],
-        ["Day 1: Chest & Back", "Bent-Over Row", 4, 10, "90 sec"],
-        ["Day 1: Chest & Back", "Dumbbell Pullover", 4, 8, "90 sec"],
-        ["Day 1: Chest & Back", "Dips", 4, 8, "90 sec"],
-        ["Day 1: Chest & Back", "Seated Cable Row", 4, 8, "90 sec"],
-        ["Day 2: Quad & Hamstrings", "Squat", 4, 12, "90 sec"],
-        ["Day 2: Quad & Hamstrings", "Romanian Deadlift", 4, 10, "90 sec"],
-        ["Day 2: Quad & Hamstrings", "Leg Extension", 4, 10, "90 sec"],
-        ["Day 2: Quad & Hamstrings", "Leg Curls", 4, 10, "90 sec"],
-        ["Day 2: Quad & Hamstrings", "Calf Raise", 6, 6, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Military Press (OHP)", 4, 12, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Side Lateral Raise", 4, 12, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Front Raise with Barbell", 4, 12, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Face Pulls", 4, 12, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Rear Delt Flys", 3, 12, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Barbell Curls", 4, 10, "90 sec"],
-        ["Day 4: Deltoid & Arms", "Skull Crusher", 4, 10, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Sumo Deadlift", 4, 12, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Leg Curl", 5, 6, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Front Squat", 4, 12, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Romanian Deadlift", 4, 8, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Leg Press", 4, 12, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Hyperextensions", 3, 12, "90 sec"],
-        ["Day 5: Hamstrings & Quads", "Calf Press in Leg Machine", 4, 15, "90 sec"],
-        ["Day 6: Chest & Arms", "Dumbbell Bench Press", 4, 12, "90 sec"],
-        ["Day 6: Chest & Arms", "Dumbbell Fly", 4, 10, "90 sec"],
-        ["Day 6: Chest & Arms", "Side Lateral Raise", 3, 12, "90 sec"],
-        ["Day 6: Chest & Arms", "Biceps Curls with EZ-Bar", 4, 10, "90 sec"],
-        ["Day 6: Chest & Arms", "Triceps Cable Push Downs", 4, 10, "120 sec"]
-    ]
-
-    # Convert to DataFrame
-    df_structured = pd.DataFrame(structured_workout_data, columns=["Day Of Week", "Exercise", "Sets", "Reps", "Rest Time"])
-
-    # Define the correct weekly progressions for focus exercises
-    corrected_focus_progression = {
-        "Barbell Bench Press": [[4, 12], [4, 10], [4, 6], [4, 6], [5, 8], [5, 8], [5, 5], [5, 5], [6, 5], [6, 5], [6, 3], [6, 3]],
-        "Squat": [[4, 12], [4, 10], [4, 6], [4, 6], [5, 12], [5, 8], [5, 5], [5, 5], [6, 5], [6, 5], [6, 3], [6, 3]],
-        "Military Press (OHP)": [[4, 12], [4, 10], [4, 6], [4, 6], [5, 12], [5, 8], [5, 5], [5, 5], [6, 5], [6, 5], [6, 3], [6, 3]],
-        "Sumo Deadlift": [[4, 12], [4, 10], [4, 6], [4, 6], [5, 12], [5, 8], [5, 5], [5, 5], [6, 5], [6, 5], [6, 3], [6, 3]],
-        "Dumbbell Bench Press": [[4, 12], [4, 10], [4, 6], [4, 6], [5, 8], [5, 8], [5, 5], [5, 5], [5, 5], [5, 5], [5, 5], [5, 5]]
-    }
-
-    # Generate the 12-week plan including dynamic focus exercise progression
-    workout_data = []
-    for week in range(1, 13):
-        for _, row in df_structured.iterrows():
-            exercise = row["Exercise"]
-            if exercise in corrected_focus_progression:
-                sets, reps = corrected_focus_progression[exercise][week - 1]  # Adjust for focus exercises
-            else:
-                sets, reps = row["Sets"], row["Reps"]  # Keep default for non-focus exercises
-
-            workout_data.append([row["Day Of Week"], exercise, sets, reps, row["Rest Time"], f"Week {week}", "", "", ""])
-
-    # Convert the structured data into a DataFrame
-    df_final = pd.DataFrame(workout_data, columns=["Day Of Week", "Exercise", "Sets", "Reps", "Rest Time", "Week", "ORM", "Reality Sets/Reps", "Notes"])
-
-    return df_final
-
+def load_workout_plan(file_path=PLAN_FILE_NAME):
+    return pd.read_csv(file_path)
+    
 # Authenticate and create Drive service
 def authenticate_google_drive():
     creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=SCOPES)
@@ -286,7 +224,7 @@ if not is_completed:
             "Sets": [completed_sets],
             "Reps": [reps],
             "Weights": [weights],
-            "Completed": [True if completed_sets > 0 else False],
+            "Completed": [True if (completed_sets > 0 and not auto_input_rep) or( orm > 0 and  auto_input_rep) else False],
             "ORM": [orm],
             "Notes": [notes],
             "Timestamp": [timestamp],
@@ -298,21 +236,30 @@ if not is_completed:
         st.success(f"Logged {selected_exercise} successfully!")
         st.rerun()
 
-elif is_completed:
+else:
     # Find in logged exercises that if selected_exercise is completed
     selected_exercise_data = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day) & (workout_log["Exercise"] == selected_exercise)]
     
     if not selected_exercise_data.empty:
+        
         if selected_exercise_data["Completed"].values[0]:
             st.success(f"You have completed {selected_exercise} for {selected_day}!")
         else:
             st.warning(f"You have skipped {selected_exercise} for {selected_day}!")
-    else:
+        confirm_delete = st.checkbox(f"Delete {selected_exercise} of {selected_day}", key="confirm_delete_checkbox")
+        if confirm_delete:
+            if st.button(f"Delete", key="delete_button", help=f"Click to delete {selected_exercise} of {selected_day}", use_container_width=True, type="primary"):
+                workout_log = workout_log[~((workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day) & (workout_log["Exercise"] == selected_exercise))]
+                save_workout_log(service, workout_log)
+                st.success(f"Deleted {selected_exercise} of {selected_day} successfully!")
+                st.rerun()
+    else: 
         pass
     st.subheader(f"{selected_week} - {selected_day}'s Workout")
     completed_wordkout_df = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)]
     st.dataframe(completed_wordkout_df[[ "Exercise",'ORM', 'Sets', 'Reps', 'Weights','Completed','Date', 'Notes']])
-    st.subheader(f"{selected_exercise} History")
+    st.subheader(f"{selected_exercise} Result")
+    
     df_exercise_history = workout_log[workout_log["Exercise"] == selected_exercise]
     df_exercise_history = format_df_history(df_exercise_history)
     st.dataframe(df_exercise_history)
