@@ -14,6 +14,7 @@ import threading
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 FILE_NAME = 'workout_log.csv'
 PLAN_FILE_NAME = 'workout_plan.csv'
+GUIDE_FILE_NAME = 'workout_guide.csv'
 # Load credentials from Streamlit secrets
 SERVICE_ACCOUNT_INFO = st.secrets["gcp_service_account"]
 global workout_log
@@ -30,6 +31,8 @@ def format_df_history(df):
 def load_workout_plan(file_path=PLAN_FILE_NAME):
     return pd.read_csv(file_path)
     
+def load_workout_guide(file_path=GUIDE_FILE_NAME):
+    return pd.read_csv(file_path)
 # Authenticate and create Drive service
 def authenticate_google_drive():
     creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=SCOPES)
@@ -87,6 +90,7 @@ st.title("12-Week Workout Tracker")
 # Load workout data
 df_workout = load_workout_plan()
 
+df_guide = load_workout_guide()
 # Identify completion status for days
 completed_days_per_week = workout_log.groupby("Week")["Day Of Week"].nunique()
 
@@ -165,16 +169,25 @@ is_completed = selected_exercise in logged_exercises
 #     # st.success(f"All exercises for {selected_day} are completed!")
 #     st.write("Summary:")
 #     st.dataframe(workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)])
-
+exercise_guide = df_guide[df_guide["Exercise"] == selected_exercise]
+if st.button(f"Show {selected_exercise} Guide"):
+    exercise_guide = df_guide[df_guide["Exercise"] == selected_exercise]
+    if not exercise_guide.empty:
+        guide_url = exercise_guide["guide_url"].values[0]
+        video_embed_url = exercise_guide["video_embed_url"].values[0]
+        st.markdown(f"[**{selected_exercise}**]({guide_url})")
+        st.video(video_embed_url)
+    else:
+        st.warning("No guide available for this exercise.")
 if not is_completed:
     df_week = df_workout[(df_workout["Week"] == selected_week) & (df_workout["Day Of Week"] == selected_day)]
-    st.write(f"**Selected Exercise:** {selected_exercise}")
     exercise_details = df_week[df_week["Exercise"] == selected_exercise].iloc[0]
     st.write(f"**Target Sets:** {exercise_details['Sets']}, **Target Reps:** {exercise_details['Reps']}, **Rest Time:** {exercise_details['Rest Time']}")
-    # Add a link to search for the selected exercise on Google
-    query = selected_exercise + " body building guide"
-    search_query = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-    st.markdown(f"[Search for {selected_exercise} on Google]({search_query})")
+    # # Add a link to search for the selected exercise on Google
+    # query = selected_exercise + " body building guide"
+    # search_query = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+    # st.markdown(f"[Search for {selected_exercise} on Google]({search_query})")
+    
     # Exercise History
     st.subheader("Exercise History")
     df_exercise_history = workout_log[workout_log["Exercise"] == selected_exercise]
@@ -184,8 +197,8 @@ if not is_completed:
     
     workout_date = st.date_input("Workout Date", datetime.date.today())
     # completed_sets = st.number_input("Sets - Target: " + str(exercise_details['Sets']), min_value=0, step=1)
-    weights = st.text_input("Weights (comma separated) - Last ORM: " + str(last_orm))
-    reps = st.text_input("Reps (comma separated) - Target: " + str(exercise_details['Reps']) + " Reps x " + str(exercise_details['Sets']) + " Sets, Finished by default.")
+    weights = st.text_input("Weights (comma separated) - **Last ORM:** " + str(last_orm))
+    reps = st.text_input("**Reps** (comma separated) - **Target:** " + str(exercise_details['Reps']) + " **Reps** x " + str(exercise_details['Sets']) + " **Sets**, Finished by default.")
     # Clean the reps and weights text, keep only float numbers and commas
     completed_reps = [float(x) for x in re.findall(r'\d+\.?\d*', reps)]
     auto_input_rep = False
@@ -201,7 +214,7 @@ if not is_completed:
         max_weight = max(completed_weights)
         completed_sets = len(completed_reps)
         if not auto_input_rep:
-            st.write(f"Completed Sets: {completed_sets}/{exercise_details['Sets']}")
+            st.write(f"**Completed Sets:** {completed_sets}/{exercise_details['Sets']}")
         orm = max_weight
         # max_reps = completed_reps[completed_weights.index(max_weight)]
         # if max_reps > 1:
@@ -211,7 +224,7 @@ if not is_completed:
     else:
         orm = 0
 
-    st.write(f"Calculated One Rep Max (ORM): {orm}")
+    st.write(f"**One Rep Max (ORM)**: {orm}")
     # orm = st.number_input("One Rep Max (ORM)", min_value=0.0, step=0.1)
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -224,7 +237,7 @@ if not is_completed:
             "Sets": [completed_sets],
             "Reps": [reps],
             "Weights": [weights],
-            "Completed": [True if (completed_sets > 0 and not auto_input_rep) or( orm > 0 and  auto_input_rep) else False],
+            "Completed": [True if (completed_sets > 0 and not auto_input_rep) or( orm > 0 and auto_input_rep) else False],
             "ORM": [orm],
             "Notes": [notes],
             "Timestamp": [timestamp],
@@ -235,7 +248,15 @@ if not is_completed:
         save_workout_log(service, workout_log)
         st.success(f"Logged {selected_exercise} successfully!")
         st.rerun()
-
+    exercise_guide = df_guide[df_guide["Exercise"] == selected_exercise]
+    if not exercise_guide.empty:
+        guide_url = exercise_guide["guide_url"].values[0]
+        video_embed_url = exercise_guide["video_embed_url"].values[0]
+        
+        st.video(video_embed_url)
+        st.markdown(f"[**{selected_exercise} Guide**]({guide_url})")
+    else:
+        st.warning("No guide available for this exercise.")
 else:
     # Find in logged exercises that if selected_exercise is completed
     selected_exercise_data = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day) & (workout_log["Exercise"] == selected_exercise)]
@@ -255,6 +276,7 @@ else:
                 st.rerun()
     else: 
         pass
+    
     st.subheader(f"{selected_week} - {selected_day}'s Workout")
     completed_wordkout_df = workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)]
     st.dataframe(completed_wordkout_df[[ "Exercise",'ORM', 'Sets', 'Reps', 'Weights','Completed','Date', 'Notes']])
