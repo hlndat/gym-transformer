@@ -170,15 +170,6 @@ is_completed = selected_exercise in logged_exercises
 #     st.write("Summary:")
 #     st.dataframe(workout_log[(workout_log["Week"] == selected_week) & (workout_log["Day Of Week"] == selected_day)])
 exercise_guide = df_guide[df_guide["Exercise"] == selected_exercise]
-if st.button(f"Show {selected_exercise} Guide"):
-    exercise_guide = df_guide[df_guide["Exercise"] == selected_exercise]
-    if not exercise_guide.empty:
-        guide_url = exercise_guide["guide_url"].values[0]
-        video_embed_url = exercise_guide["video_embed_url"].values[0]
-        st.markdown(f"[**{selected_exercise}**]({guide_url})")
-        st.video(video_embed_url)
-    else:
-        st.warning("No guide available for this exercise.")
 if not is_completed:
     df_week = df_workout[(df_workout["Week"] == selected_week) & (df_workout["Day Of Week"] == selected_day)]
     exercise_details = df_week[df_week["Exercise"] == selected_exercise].iloc[0]
