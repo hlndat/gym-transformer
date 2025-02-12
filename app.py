@@ -12,7 +12,7 @@ import threading
 
 # Google Drive API setup using Streamlit Secrets
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-FILE_NAME = 'workout_log.csv'
+FILE_NAME = 'workout_log_forked.csv'
 PLAN_FILE_NAME = 'workout_plan.csv'
 GUIDE_FILE_NAME = 'workout_guide.csv'
 # Load credentials from Streamlit secrets
