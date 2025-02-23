@@ -109,7 +109,7 @@ if st.session_state.get('authentication_status'):
         workout_log = pd.read_csv(FILE_NAME)
 
 
-    st.title(f"Bí kíp tu tiên ({st.session_state['username']})")
+    st.title(f"Bí kíp tu tiên demo ({st.session_state['username']})")
 
     # Load workout data
     df_workout = load_workout_plan()
